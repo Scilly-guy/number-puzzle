@@ -6,6 +6,61 @@
     <title>Number Puzzle</title>
 </head>
 <body>
-    
+    <svg id="game_area" viewBox="0 0 1000 500">
+    <style>
+        .highlight:hover{
+            stroke:black;
+            stroke-width: 2px;
+        }
+    </style></svg>
+    <script>
+        const gameArea=document.getElementById("game_area");
+        const svg_namespace="http://www.w3.org/2000/svg"
+        const box_size=50
+        const padding=3
+
+        drawGrid(7)
+
+        function drawGrid(size){
+            for(var i=0;i<size;i++){
+                for(var j=0;j<size;j++){
+                    drawBox(i,j,Math.ceil(Math.random()*9))
+                }
+            }
+        }
+
+        function drawBox(grid_x,grid_y,number){
+            const box=createSvgElement("rect",{
+                width:box_size,
+                height:box_size,
+                x:grid_x*box_size+grid_x*padding,
+                y:grid_y*box_size+grid_y*padding,
+                fill:"white",
+                stroke:"#aaaaaa",
+                "stroke-width":"1"
+            })
+            box.classList.add("highlight")
+            let number_x=grid_x*box_size+box_size/2+grid_x*padding;
+            let number_y=grid_y*box_size+box_size/2+grid_y*padding;
+
+            const number_element=createSvgElement("text",{
+                x:number_x,
+                y:number_y,
+            })
+            number_element.textContent=number
+            gameArea.append(box,number_element)
+            const bbox=number_element.getBBox()
+            number_element.setAttributeNS(null,"x",number_x-bbox.width/2)
+            number_element.setAttributeNS(null,"y",number_y+bbox.height/2)
+        }
+
+        function createSvgElement(element_name,options){
+            const element=document.createElementNS(svg_namespace,element_name)
+            Object.keys(options).forEach(attr=>{
+                element.setAttributeNS(null,attr,options[attr])
+            })
+            return element
+        }
+    </script>
 </body>
 </html>
