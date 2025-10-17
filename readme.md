@@ -1,0 +1,1 @@
+A puzzle where each row, column and area has a target total sum of the numbers in it.
