@@ -6,7 +6,7 @@
     <title>Number Puzzle</title>
 </head>
 <body>
-    <svg id="game_area" viewBox="0 0 1000 500">
+    <svg id="game_area" viewBox="0 0 1000 2500">
     <style>
         .highlight:hover{
             stroke:black;
@@ -14,34 +14,44 @@
         }
     </style></svg>
     <script>
+        console.log("Script started")
         const gameArea=document.getElementById("game_area");
         const svg_namespace="http://www.w3.org/2000/svg"
         const box_size=50
         const padding=3
+        const colours=["#4287f5","#805E73","#FFC6D9","#DD6E42","#21FA90","#EBF5EE","#E5D352"]
 
-        drawGrid(7)
+        drawBeforeAfter(12)
 
-        function drawGrid(size){
+        function drawBeforeAfter(size){
+            const data=rasterVoronoi(size,size,10)
+            drawGrid(size,data,0)
+            minRegionSize(data,6)
+            drawGrid(size,data,(box_size+padding)*size+2*padding)
+        }
+
+        function drawGrid(size,data,offset_y){
+            console.log("drawing a grid")
             for(var i=0;i<size;i++){
                 for(var j=0;j<size;j++){
-                    drawBox(i,j,Math.ceil(Math.random()*9))
+                    drawBox(i,j,data[i][j],offset_y)
                 }
             }
         }
 
-        function drawBox(grid_x,grid_y,number){
+        function drawBox(grid_x,grid_y,number,offset_y){
             const box=createSvgElement("rect",{
                 width:box_size,
                 height:box_size,
                 x:grid_x*box_size+grid_x*padding,
-                y:grid_y*box_size+grid_y*padding,
-                fill:"white",
+                y:grid_y*box_size+grid_y*padding+offset_y,
+                fill:colours[number],
                 stroke:"#aaaaaa",
                 "stroke-width":"1"
             })
             box.classList.add("highlight")
             let number_x=grid_x*box_size+box_size/2+grid_x*padding;
-            let number_y=grid_y*box_size+box_size/2+grid_y*padding;
+            let number_y=grid_y*box_size+box_size/2+grid_y*padding+offset_y;
 
             const number_element=createSvgElement("text",{
                 x:number_x,
@@ -60,6 +70,231 @@
                 element.setAttributeNS(null,attr,options[attr])
             })
             return element
+        }
+
+        function rasterVoronoi(grid_width,grid_height,number_regions){
+            console.log("creating voronoi regions:")
+            const x_centers=[]
+            const y_centers=[]
+            const ids=[]
+            const voronoi=[]
+            console.log("  creating voronoi centres:")
+            for(var i=0;i<number_regions;i++){
+                x_centers.push(Math.floor(Math.random()*grid_width))
+                y_centers.push(Math.floor(Math.random()*grid_height))
+                let id=y_centers[i]*grid_width+x_centers[i]
+                while(ids.length>0 && ids.indexOf(id)>=0){
+                    console.log(`    indexOf: ${ids.indexOf(id)}`)
+                    x_centers[i]=Math.floor(Math.random()*grid_width)
+                    y_centers[i]=Math.floor(Math.random()*grid_height)
+                    console.log(`    new center:(${x_centers[i]},${y_centers[i]})`)
+                    id=y_centers[i]*grid_width+x_centers[i]
+                }
+                ids.push(id)
+            }
+            console.log("  calculating regions")
+            for(var i=0;i<grid_height;i++){
+                const rows=[]
+                for(var j=0;j<grid_width;j++){
+                    let min_distance=grid_height+grid_width//larger than possible
+                    let min_region
+                    for(var loop_regions=0;loop_regions<number_regions;loop_regions++){
+                        this_distance=distance(i,j,x_centers[loop_regions],y_centers[loop_regions])
+                        if(this_distance<min_distance){
+                            min_region=loop_regions
+                            min_distance=this_distance
+                        }
+                    }
+                    rows.push(min_region)
+                }
+                voronoi.push(rows)
+            }
+            return voronoi;
+        }
+
+        function minRegionSize(voronoi,min_region_size){
+            console.log("performing min size checks:")
+            const sizes=[]
+            let num_undersized=0
+            let changes_made=true
+            let count=0
+            console.log("  calculating sizes:")
+            for(var i=0;i<voronoi.length;i++){
+                for(var j=0;j<voronoi[i].length;j++){
+                    while(voronoi[i][j]>=sizes.length){
+                        sizes.push(0)
+                    }
+                    sizes[voronoi[i][j]]++
+                }
+            }
+            console.log("  "+sizes)
+            sizes.forEach(region=>{if(region<min_region_size)num_undersized++})
+            let temp_min_size=min_region_size
+            while(num_undersized>0 && count<20){
+                console.log(`  Undersized regions: ${num_undersized}`)
+                if(changes_made){
+                    changes_made=false
+                    for(var region=0;region<sizes.length;region++){
+                        const cells=getCellsForRegion(region,voronoi)
+                        if(sizes[region]>temp_min_size){
+                            console.log(`region:${region} size:${sizes[region]}`)
+                            //get x range
+                            const range={min:voronoi[0].length,max:0}
+                            cells.forEach(cell=>{
+                                if(cell.x>range.max)range.max=cell.x
+                                if(cell.x<range.min)range.min=cell.x
+                            })
+                            
+                            const options=[]
+                            for(var option=range.min;option<=range.max;option++){
+                                options.push(option)
+                            }
+                            let foundOne=false
+                            while(!foundOne && options.length>0){
+                                option_index=Math.floor(Math.random()*options.length)
+                                const x=options[option_index]
+                                options.splice(option_index,1)
+                                let y=0
+                                while(y<voronoi.length && voronoi[y][x]!=region){
+                                    y++
+                                }
+                                const above=y-1
+                                if(above>=0 && sizes[voronoi[above][x]]<temp_min_size){
+                                    sizes[region]--
+                                    voronoi[y][x]=voronoi[above][x]
+                                    sizes[voronoi[above][x]]++
+                                    foundOne=true
+                                    changes_made=true
+                                    console.log(`  Switched (${x},${above})`)
+                                    if(temp_min_size>min_region_size){
+                                        temp_min_size--
+                                        console.log(`  Decreasing min_size to ${temp_min_size}`)
+                                    }
+                                    else{
+                                        if(sizes[voronoi[above][x]]>=min_region_size)num_undersized--
+                                    }
+                                }
+                                else{
+                                    while(y<voronoi.length && voronoi[y][x]==region){
+                                        y++
+                                    }
+                                    const below=y
+                                    y--
+                                    if(below<voronoi.length && sizes[voronoi[below][x]]<temp_min_size){
+                                        sizes[region]--
+                                        voronoi[y][x]=voronoi[below][x]
+                                        sizes[voronoi[below][x]]++
+                                        foundOne=true
+                                        changes_made=true
+                                        console.log(`  Switched (${x},${below})`)
+                                        if(temp_min_size>min_region_size){
+                                            temp_min_size--
+                                            console.log(`  Decreasing min_size to ${temp_min_size}`)
+                                        }
+                                        else{
+                                            if(sizes[voronoi[below][x]]>=min_region_size)num_undersized--
+                                        }
+                                    }
+                                }
+                            }
+                            if(!foundOne){
+                                //get y range
+                                const range={min:voronoi.length,max:0}
+                                cells.forEach(cell=>{
+                                    if(cell.y>range.max)range.max=cell.y
+                                    if(cell.y<range.min)range.min=cell.y
+                                })
+                                
+                                const options=[]
+                                for(var option=range.min;option<=range.max;option++){
+                                    options.push(option)
+                                }
+                                let foundOne=false
+                                while(!foundOne && options.length>0){
+                                    option_index=Math.floor(Math.random()*options.length)
+                                    const y=options[option_index]
+                                    options.splice(option_index,1)
+                                    let x=0
+                                    while(voronoi[y][x]!=region){
+                                        x++
+                                    }
+                                    const left=x-1
+                                    if(left>=0 && sizes[voronoi[y][left]]<temp_min_size){
+                                        sizes[region]--
+                                        voronoi[y][x]=voronoi[y][left]
+                                        sizes[voronoi[y][left]]++
+                                        foundOne=true
+                                        changes_made=true
+                                        console.log(`  Switched (${left},${y})`)
+                                        if(temp_min_size>min_region_size){
+                                            temp_min_size--
+                                            console.log(`  Decreasing min_size to ${temp_min_size}`)
+                                        }
+                                        else{
+                                            if(sizes[voronoi[y][left]]>=min_region_size)num_undersized--
+                                        }
+                                    }
+                                    else{
+                                        while(x<voronoi[y].length && voronoi[y][x]==region){
+                                            x++
+                                        }
+                                        const right=x
+                                        x--
+                                        if(right<voronoi[y].length && sizes[voronoi[y][right]]<temp_min_size){
+                                            sizes[region]--
+                                            voronoi[y][x]=voronoi[right][x]
+                                            sizes[voronoi[y][right]]++
+                                            foundOne=true
+                                            changes_made=true
+                                            console.log(`  Switched (${right},${y})`)
+                                            if(temp_min_size>min_region_size){
+                                                temp_min_size--
+                                                console.log(`  Decreasing min_size to ${temp_min_size}`)
+                                            }
+                                            else{
+                                                if(sizes[voronoi[y][right]]>=min_region_size)num_undersized--
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if(!num_undersized) break;
+                    }
+                }
+                else{
+                    temp_min_size++
+                    count++
+                    changes_made=true
+                    console.log(`Increasing min_size to ${temp_min_size}`)
+                }
+            }
+        }
+
+        //0 get the size of each region
+        //1 are all regions big enough
+        //2 if yes finish
+        //3 if not loop through regions
+        //4 if region is big enough (min+1)
+        //5 loop through neighbours
+        //6 give to neighbour who isn't big enough
+        //  adjust sizes
+        //7 loop to 1
+
+        function getCellsForRegion(region,voronoi){
+            const cells=[]
+            for(var i=0;i<voronoi.length;i++){
+                for(var j=0;j<voronoi[i].length;j++){
+                    if(voronoi[i][j]===region){
+                        cells.push({x:j,y:i})
+                    }
+                }
+            }
+            return cells
+        }
+
+        function distance(x,y,tx,ty){
+            return Math.sqrt(Math.pow(Math.abs(tx-x),2)+Math.pow(Math.abs(ty-y),2))
         }
     </script>
 </body>
