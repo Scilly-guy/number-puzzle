@@ -4,8 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Number Puzzle</title>
+    <style>
+        body{
+            background-color: black;
+        }
+    </style>
 </head>
 <body>
+    <Button id="regen">Regen</Button>
     <svg id="game_area" viewBox="0 0 1000 2500">
     <style>
         .highlight:hover{
@@ -16,18 +22,26 @@
     <script>
         console.log("Script started")
         const gameArea=document.getElementById("game_area");
+        const regen_button=document.getElementById("regen")
         const svg_namespace="http://www.w3.org/2000/svg"
         const box_size=50
         const padding=3
         const colours=["#4287f5","#805E73","#FFC6D9","#DD6E42","#21FA90","#EBF5EE","#E5D352"]
 
-        drawBeforeAfter(12)
+        drawBeforeAfter(7)
+
+        regen_button.addEventListener("click",()=>{
+            while(gameArea.firstChild){
+                gameArea.firstChild.remove()
+            }
+            drawBeforeAfter(7)
+        })
 
         function drawBeforeAfter(size){
-            const data=rasterVoronoi(size,size,10)
-            drawGrid(size,data,0)
+            const data=rasterVoronoi(size,size,7)
+            //drawGrid(size,data,0)
             minRegionSize(data,6)
-            drawGrid(size,data,(box_size+padding)*size+2*padding)
+            drawGrid(size,data,0)
         }
 
         function drawGrid(size,data,offset_y){
@@ -130,7 +144,7 @@
             console.log("  "+sizes)
             sizes.forEach(region=>{if(region<min_region_size)num_undersized++})
             let temp_min_size=min_region_size
-            while(num_undersized>0 && count<20){
+            while(num_undersized>0 && count<200){
                 console.log(`  Undersized regions: ${num_undersized}`)
                 if(changes_made){
                     changes_made=false
@@ -155,7 +169,7 @@
                                 const x=options[option_index]
                                 options.splice(option_index,1)
                                 let y=0
-                                while(y<voronoi.length && voronoi[y][x]!=region){
+                                while(y<voronoi.length-1 && voronoi[y][x]!=region){
                                     y++
                                 }
                                 const above=y-1
