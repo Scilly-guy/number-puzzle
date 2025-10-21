@@ -27,6 +27,20 @@
         const box_size=50
         const padding=3
         const colours=["#4287f5","#805E73","#FFC6D9","#DD6E42","#21FA90","#EBF5EE","#E5D352"]
+        let ctrlHeld = false;
+
+        window.addEventListener("keydown", (e) => {
+        if (e.ctrlKey || e.metaKey) {
+            ctrlHeld = true;
+        }
+        });
+
+        window.addEventListener("keyup", (e) => {
+        // Update state properly when either key is released
+        if (!e.ctrlKey && !e.metaKey) {
+            ctrlHeld = false;
+        }
+        });
 
         drawBeforeAfter(7)
 
@@ -41,25 +55,39 @@
             const data=rasterVoronoi(size,size,7)
             //drawGrid(size,data,0)
             minRegionSize(data,6)
-            drawGrid(size,data,0)
+            const game=generateSolution(data)
+            game.grid=fillGridRandom(game,data)
+            drawGrid(size,data,game,0)
         }
 
-        function drawGrid(size,data,offset_y){
+        function drawGrid(size,regioned_grid,game,offset_y){
             console.log("drawing a grid")
+            const first_cells=[]
+            game.regions.forEach(region=>{first_cells.push(region[0])})
             for(var i=0;i<size;i++){
                 for(var j=0;j<size;j++){
-                    drawBox(i,j,data[i][j],offset_y)
+                    let first_cell_index=-1
+                    first_cells.forEach((cell,index)=>{
+                        if(cell.x===j && cell.y===i){
+                            first_cell_index=index
+                        }
+                    })
+                    let total=0
+                    if(first_cell_index>=0){
+                        total=game.totals[first_cell_index]
+                    }
+                    drawBox(i,j,regioned_grid[i][j],game.grid[i][j],offset_y,total)
                 }
             }
         }
 
-        function drawBox(grid_x,grid_y,number,offset_y){
+        function drawBox(grid_x,grid_y,region_colour,number,offset_y,total){
             const box=createSvgElement("rect",{
                 width:box_size,
                 height:box_size,
                 x:grid_x*box_size+grid_x*padding,
                 y:grid_y*box_size+grid_y*padding+offset_y,
-                fill:colours[number],
+                fill:colours[region_colour],
                 stroke:"#aaaaaa",
                 "stroke-width":"1"
             })
@@ -67,12 +95,42 @@
             let number_x=grid_x*box_size+box_size/2+grid_x*padding;
             let number_y=grid_y*box_size+box_size/2+grid_y*padding+offset_y;
 
+            const circle=createSvgElement("circle",{
+                r:box_size/4,
+                cx:grid_x*box_size+grid_x*padding+box_size/2,
+                cy:grid_y*box_size+grid_y*padding+box_size/2+offset_y,
+                fill:"none",
+                stroke:"none",
+                "stroke-width":"1"
+            })
+
             const number_element=createSvgElement("text",{
                 x:number_x,
                 y:number_y,
             })
             number_element.textContent=number
-            gameArea.append(box,number_element)
+
+            const total_element=createSvgElement("text",{
+                x:number_x-box_size/2+3,
+                y:number_y-box_size/2+12,
+                "font-size":10
+            })
+            if(total>0){
+                total_element.textContent=total
+            }
+            const group=createSvgElement("g",{})
+            group.append(box,number_element,total_element,circle)
+            group.addEventListener('click',()=>{
+                if(ctrlHeld){
+                    console.log(`Remove (${grid_x},${grid_y})`)
+                    number_element.textContent=""
+                }
+                else{
+                    console.log(`Confirm (${grid_x},${grid_y})`)
+                    circle.setAttributeNS(null,"stroke","#aaaaaa")
+                }
+            })
+            gameArea.append(group)
             const bbox=number_element.getBBox()
             number_element.setAttributeNS(null,"x",number_x-bbox.width/2)
             number_element.setAttributeNS(null,"y",number_y+bbox.height/2)
@@ -285,15 +343,55 @@
             }
         }
 
-        //0 get the size of each region
-        //1 are all regions big enough
-        //2 if yes finish
-        //3 if not loop through regions
-        //4 if region is big enough (min+1)
-        //5 loop through neighbours
-        //6 give to neighbour who isn't big enough
-        //  adjust sizes
-        //7 loop to 1
+        function generateSolution(regioned_grid){
+            const solution=[]
+            const regions=[]
+            const totals=[]
+            for(let i=0;i<regioned_grid.length;i++){
+                solution[i]=[]
+                for(let j=0;j<regioned_grid[0].length;j++){
+                    const chance=Math.floor(Math.random()*100)
+                    if(chance<40){
+                        solution[i][j]=Math.ceil(Math.random()*9)
+                    }
+                    else{
+                        solution[i][j]=0
+                    }
+                    while(regioned_grid[i][j]>=regions.length){
+                        regions.push([])
+                    }
+                    regions[regioned_grid[i][j]].push({x:j,y:i})
+                }
+            }
+            regions.forEach((region,index)=>{
+                totals.push(0)
+                region.forEach(cell=>{
+                    totals[index]+=solution[cell.y][cell.x]
+                })
+                if(totals[index]===0){
+                    const random_index=Math.floor(region.length*Math.random())
+                    const {x,y}=region[random_index]
+                    solution[y][x]=Math.ceil(Math.random()*9)
+                    totals[index]=solution[y][x]
+                }
+            })
+            return {solution,totals,regions}
+        }
+
+        function fillGridRandom(game,regioned_grid){
+            const grid=[]
+            game.solution.forEach((row,i)=>{
+                grid.push([])
+                row.forEach((cell,j)=>{
+                    let value=cell
+                    if(value===0){
+                        value=Math.ceil(Math.random()*9)
+                    }
+                    grid[i][j]=value
+                })
+            })
+            return grid
+        }
 
         function getCellsForRegion(region,voronoi){
             const cells=[]
